@@ -1,7 +1,8 @@
 {
   "name": "caixa-bot",
   "version": "1.0.0",
-  "description": "Webhook WhatsApp Caixa Bot",
+  "private": true,
+  "description": "Caixa Bot WhatsApp",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
