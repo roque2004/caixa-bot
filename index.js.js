@@ -1,12 +1,14 @@
+require("dotenv").config();
 const express = require("express");
-const fetch = require("node-fetch"); // npm install node-fetch@2
-const app = express();
+const { processMessage } = require("./logic/fechamento");
 
+const app = express();
 app.use(express.json());
 
-// 🔹 Verificação do webhook
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "caixabot123";
+
+/* 🔹 Verificação do webhook */
 app.get("/webhook", (req, res) => {
-  const VERIFY_TOKEN = "caixabot123";
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
@@ -17,41 +19,26 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// 🔹 Receber e responder mensagens
+/* 🔹 Receber mensagens */
 app.post("/webhook", async (req, res) => {
-  const entry = req.body.entry?.[0];
-  const changes = entry?.changes?.[0];
-  const value = changes?.value;
-  const message = value?.messages?.[0];
+  console.log("📦 PAYLOAD RECEBIDO:");
+  console.log(JSON.stringify(req.body, null, 2));
 
-  if (message) {
-    const from = message.from; // número do usuário
-    const text = message.text?.body;
+  try {
+    const message =
+      req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-    console.log("📩 Nova mensagem:", from, text);
-
-    // 🔹 Enviar resposta automática
-    const token = process.env.WHATSAPP_TOKEN; // coloque seu token do Meta no Render
-    const phone_number_id = process.env.WHATSAPP_PHONE_ID; // id do número do WhatsApp Cloud
-
-    await fetch(`https://graph.facebook.com/v17.0/${phone_number_id}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: from,
-        text: { body: `Oi! Recebi sua mensagem: "${text}"` },
-      }),
-    });
+    if (message && message.text) {
+      const texto = message.text.body;
+      await processMessage(texto);
+    }
+  } catch (err) {
+    console.error("Erro ao processar mensagem:", err.message);
   }
 
   res.sendStatus(200);
 });
 
-// Porta do Render
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Bot rodando na porta", PORT);
