@@ -27,6 +27,27 @@ async function salvarCaixa(tipo, valor, forma, obs) {
   });
 }
 
+async function salvarGasto(cat, sub, valor, forma, obs) {
+  const client = await auth.getClient();
+
+  await sheets.spreadsheets.values.append({
+    auth: client,
+    spreadsheetId: process.env.SHEET_ID,
+    range: "GASTOS!A:F",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        new Date().toLocaleString("pt-BR"),
+        cat,
+        sub,
+        valor,
+        forma,
+        obs
+      ]]
+    }
+  });
+}
+
 async function salvarFechamentoCompleto(d) {
   const client = await auth.getClient();
 
@@ -57,4 +78,8 @@ async function salvarFechamentoCompleto(d) {
   });
 }
 
-module.exports = { salvarCaixa, salvarFechamentoCompleto };
+module.exports = {
+  salvarCaixa,
+  salvarGasto,
+  salvarFechamentoCompleto
+};

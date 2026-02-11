@@ -3,6 +3,7 @@ const express = require("express");
 
 const {
   salvarCaixa,
+  salvarGasto,
   salvarFechamentoCompleto
 } = require("./services/sheets");
 
@@ -43,11 +44,7 @@ app.post("/webhook", async (req, res) => {
     // =====================
     // 🧾 FECHAMENTO AUTO
     // =====================
-    if (
-      msg.includes("vendi") &&
-      msg.includes("dinheiro") &&
-      msg.includes("pix")
-    ) {
+    if (msg.includes("vendi") && msg.includes("pix")) {
 
       const pegar = (campo) => {
         const r = new RegExp(campo + "\\s+(\\d+)", "i").exec(texto);
@@ -68,9 +65,6 @@ app.post("/webhook", async (req, res) => {
       const caixaEsperado = caixaInicial + dinheiro - sangria;
       const maqEsperada = debito + credito + pix;
 
-      const diffCaixa = caixaReal - caixaEsperado;
-      const diffMaq = maqReal - maqEsperada;
-
       await salvarFechamentoCompleto({
         total,
         caixaInicial,
@@ -82,19 +76,47 @@ app.post("/webhook", async (req, res) => {
         sangria,
         caixaEsperado,
         caixaReal,
-        diffCaixa,
+        diffCaixa: caixaReal - caixaEsperado,
         maqEsperada,
         maqReal,
-        diffMaq
+        diffMaq: maqReal - maqEsperada
       });
 
-      console.log("🧾 Fechamento detectado automático");
+      console.log("🧾 Fechamento salvo");
       return res.sendStatus(200);
     }
 
+    // =====================
+    // 💸 SAÍDA INTELIGENTE
+    // =====================
+    if (
+      msg.includes("paguei") ||
+      msg.includes("gastei") ||
+      msg.includes("comprei") ||
+      msg.includes("dei ")
+    ) {
+
+      const num = msg.match(/\d+/);
+      if (!num) return res.sendStatus(200);
+
+      const valor = parseFloat(num[0]);
+
+      let cat = "outros";
+      let sub = "geral";
+
+      if (msg.includes("padeiro")) { cat="fornecedor"; sub="padeiro"; }
+      if (msg.includes("entregador")) { cat="mão de obra"; sub="entregador"; }
+      if (msg.includes("auxiliar")) { cat="mão de obra"; sub="auxiliar"; }
+
+      await salvarCaixa("SAIDA", valor, "DINHEIRO", texto);
+      await salvarGasto(cat, sub, valor, "DINHEIRO", texto);
+
+      console.log("💸 Saída registrada em caixa + gastos");
+      return res.sendStatus(200);
+    }
 
     // =====================
-    // 💰 ENTRADA EXPLÍCITA
+    // 💰 ENTRADA
     // =====================
     if (msg.startsWith("entrada")) {
 
@@ -111,35 +133,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-
-    // =====================
-    // 💸 SAÍDA FLEXÍVEL
-    // =====================
-    if (
-      msg.startsWith("saida") ||
-      msg.includes("paguei") ||
-      msg.includes("gastei") ||
-      msg.includes("comprei") ||
-      msg.includes("dei ")
-    ) {
-
-      const num = msg.match(/\d+/);
-      if (!num) return res.sendStatus(200);
-
-      const valor = parseFloat(num[0]);
-
-      await salvarCaixa(
-        "SAIDA",
-        valor,
-        "DINHEIRO",
-        texto
-      );
-
-      console.log("💸 Saída detectada automática");
-
-      return res.sendStatus(200);
-    }
-
     await processMessage(texto);
 
   } catch (err) {
@@ -151,5 +144,5 @@ app.post("/webhook", async (req, res) => {
 
 
 app.listen(process.env.PORT || 3000, () =>
-  console.log("🚀 Servidor rodando")
+  console.log("🚀 Rodando")
 );
