@@ -1,5 +1,5 @@
 async function processMessage(texto) {
-  console.log("ℹ️ Mensagem sem comando reconhecido:", texto);
+  console.log("ℹ️ Sem comando reconhecido:", texto);
 }
 
 module.exports = { processMessage };

@@ -8,15 +8,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 async function salvarCaixa(tipo, valor, forma, obs) {
-
-  if (!process.env.SHEET_ID) {
-    console.log("❌ SHEET_ID não configurado");
-    return;
-  }
-
   const client = await auth.getClient();
-
-  const data = new Date().toLocaleString("pt-BR");
 
   await sheets.spreadsheets.values.append({
     auth: client,
@@ -24,11 +16,45 @@ async function salvarCaixa(tipo, valor, forma, obs) {
     range: "CAIXA!A:E",
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [[data, tipo, valor, forma, obs]]
+      values: [[
+        new Date().toLocaleString("pt-BR"),
+        tipo,
+        valor,
+        forma,
+        obs
+      ]]
     }
   });
-
-  console.log("📊 Linha inserida no Sheets");
 }
 
-module.exports = { salvarCaixa };
+async function salvarFechamentoCompleto(d) {
+  const client = await auth.getClient();
+
+  await sheets.spreadsheets.values.append({
+    auth: client,
+    spreadsheetId: process.env.SHEET_ID,
+    range: "FECHAMENTO!A:O",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        new Date().toLocaleDateString(),
+        d.total,
+        d.caixaInicial,
+        d.dinheiro,
+        d.debito,
+        d.credito,
+        d.pix,
+        d.ifood,
+        d.sangria,
+        d.caixaEsperado,
+        d.caixaReal,
+        d.diffCaixa,
+        d.maqEsperada,
+        d.maqReal,
+        d.diffMaq
+      ]]
+    }
+  });
+}
+
+module.exports = { salvarCaixa, salvarFechamentoCompleto };
