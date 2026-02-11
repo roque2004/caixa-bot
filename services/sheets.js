@@ -1,28 +1,34 @@
 const { google } = require("googleapis");
 
-async function salvarFechamento(dados) {
+const auth = new google.auth.GoogleAuth({
+  keyFile: "credentials.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+});
+
+const sheets = google.sheets({ version: "v4", auth });
+
+async function salvarCaixa(tipo, valor, forma, obs) {
+
   if (!process.env.SHEET_ID) {
-    console.log("⚠️ SHEET_ID não configurado. Pulando gravação.");
+    console.log("❌ SHEET_ID não configurado");
     return;
   }
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: "credentials.json",
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-  });
+  const client = await auth.getClient();
 
-  const sheets = google.sheets({ version: "v4", auth });
+  const data = new Date().toLocaleString("pt-BR");
 
   await sheets.spreadsheets.values.append({
+    auth: client,
     spreadsheetId: process.env.SHEET_ID,
-    range: "FECHAMENTO!A1",
+    range: "CAIXA!A:E",
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [[dados.data, dados.observacao]]
+      values: [[data, tipo, valor, forma, obs]]
     }
   });
 
-  console.log("✅ Registro salvo na planilha");
+  console.log("📊 Linha inserida no Sheets");
 }
 
-module.exports = { salvarFechamento };
+module.exports = { salvarCaixa };
