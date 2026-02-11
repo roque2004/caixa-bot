@@ -41,30 +41,13 @@ app.post("/webhook", async (req, res) => {
     console.log("📩", texto);
 
     // =====================
-    // ENTRADA / SAIDA
+    // 🧾 FECHAMENTO AUTO
     // =====================
-    if (msg.startsWith("entrada") || msg.startsWith("saida")) {
-
-      const p = msg.split(" ");
-      if (p.length < 4) return res.sendStatus(200);
-
-      const tipo = p[0].toUpperCase();
-      const valor = parseFloat(p[1]);
-      const forma = p[2].toUpperCase();
-      const obs = p.slice(3).join(" ");
-
-      if (isNaN(valor)) return res.sendStatus(200);
-
-      await salvarCaixa(tipo, valor, forma, obs);
-
-      console.log("✅ Caixa salvo");
-      return res.sendStatus(200);
-    }
-
-    // =====================
-    // FECHAMENTO COMPLETO
-    // =====================
-    if (msg.startsWith("fechamento")) {
+    if (
+      msg.includes("vendi") &&
+      msg.includes("dinheiro") &&
+      msg.includes("pix")
+    ) {
 
       const pegar = (campo) => {
         const r = new RegExp(campo + "\\s+(\\d+)", "i").exec(texto);
@@ -105,7 +88,55 @@ app.post("/webhook", async (req, res) => {
         diffMaq
       });
 
-      console.log("🧾 Fechamento salvo");
+      console.log("🧾 Fechamento detectado automático");
+      return res.sendStatus(200);
+    }
+
+
+    // =====================
+    // 💰 ENTRADA EXPLÍCITA
+    // =====================
+    if (msg.startsWith("entrada")) {
+
+      const p = msg.split(" ");
+      if (p.length >= 3) {
+        await salvarCaixa(
+          "ENTRADA",
+          parseFloat(p[1]),
+          p[2].toUpperCase(),
+          p.slice(3).join(" ")
+        );
+      }
+
+      return res.sendStatus(200);
+    }
+
+
+    // =====================
+    // 💸 SAÍDA FLEXÍVEL
+    // =====================
+    if (
+      msg.startsWith("saida") ||
+      msg.includes("paguei") ||
+      msg.includes("gastei") ||
+      msg.includes("comprei") ||
+      msg.includes("dei ")
+    ) {
+
+      const num = msg.match(/\d+/);
+      if (!num) return res.sendStatus(200);
+
+      const valor = parseFloat(num[0]);
+
+      await salvarCaixa(
+        "SAIDA",
+        valor,
+        "DINHEIRO",
+        texto
+      );
+
+      console.log("💸 Saída detectada automática");
+
       return res.sendStatus(200);
     }
 
