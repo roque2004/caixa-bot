@@ -1,84 +1,154 @@
-function norm(t){
-  return t.toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g,"");
+function normalizar(txt){
+  return txt
+    .toLowerCase()
+    .replace(/reias|reais/g,"reais")
+    .replace(/gatos/g,"gastos")
+    .replace(/[.,]/g," ")
+    .replace(/\s+/g," ")
 }
 
-const MAP_ERROS = {
-  gatos:"gastos",
-  saindas:"saidas"
+
+// ================= DICIONÁRIOS =================
+
+const entradas = [
+  "vendi","venda","vendas","recebi","entrou","entrada","faturei"
+];
+
+const saidas = [
+  "paguei","pago","pagamento","gastei","gasto",
+  "comprei","dei","dei pro","dei pra","transferi"
+];
+
+const formas = {
+  pix: "PIX",
+  dinheiro: "DINHEIRO",
+  debito: "DEBITO",
+  débito: "DEBITO",
+  credito: "CREDITO",
+  crédito: "CREDITO",
+  cartao: "CREDITO",
+  cartão: "CREDITO"
 };
 
-function corrigir(txt){
-  let t = txt;
-  for(const e in MAP_ERROS)
-    t = t.replaceAll(e, MAP_ERROS[e]);
-  return t;
-}
 
-const FORMAS = {
-  PIX:["pix"],
-  DINHEIRO:["dinheiro","cash"],
-  DEBITO:["debito"],
-  CREDITO:["credito"]
-};
+// ================= CATEGORIAS =================
 
-const SAIDA = ["paguei","pago","dei","gastei","comprei","pra","pro","para"];
-const ENTRADA = ["vendi","vendas","entrada","entrou","recebi"];
+const mapaCat = [
+  {k:["padeiro","pao"], c:"fornecedor", s:"padeiro"},
+  {k:["ifood"], c:"taxa", s:"ifood"},
+  {k:["entregador","motoboy"], c:"mão de obra", s:"entregador"},
+  {k:["auxiliar","funcionario"], c:"mão de obra", s:"auxiliar"},
+  {k:["mercado"], c:"insumos", s:"mercado"},
+  {k:["gas","gasolina"], c:"deslocamento", s:"combustivel"},
+  {k:["embalagem","sacola"], c:"insumos", s:"embalagem"},
+];
 
-function detectarForma(t){
-  for(const f in FORMAS)
-    if(FORMAS[f].some(p=>t.includes(p))) return f;
+
+// ================= CORE =================
+
+function detectarTipo(txt){
+
+  if(entradas.some(w=>txt.includes(w))) return "ENTRADA";
+  if(saidas.some(w=>txt.includes(w))) return "SAIDA";
+
   return null;
 }
 
-function detectarTipo(t){
-  if(SAIDA.some(p=>t.includes(p))) return "SAIDA";
-  if(ENTRADA.some(p=>t.includes(p))) return "ENTRADA";
+
+function detectarForma(txt){
+
+  const tokens = txt.split(" ");
+
+  for(const t of tokens){
+
+    if(formas[t]) return formas[t];
+
+  }
+
+  // fallback regex palavra inteira
+  for(const k in formas){
+    const r = new RegExp("\\b"+k+"\\b");
+    if(r.test(txt)) return formas[k];
+  }
+
   return null;
 }
 
-function categoria(t){
-  if(t.includes("padeiro")) return ["fornecedor","padeiro"];
-  if(t.includes("frios")) return ["insumo","frios"];
-  if(t.includes("entregador")) return ["mao_obra","entregador"];
-  if(t.includes("auxiliar")) return ["mao_obra","auxiliar"];
-  return ["outros","geral"];
+
+function detectarValor(txt){
+  const m = txt.match(/\d+[.,]?\d*/);
+  if(!m) return null;
+  return parseFloat(m[0].replace(",","."));
 }
 
-function valores(t){
-  return (t.match(/\d+[.,]?\d*/g)||[])
-    .map(v=>parseFloat(v.replace(",",".")));
+
+function detectarCategoria(txt){
+  for(const item of mapaCat){
+    if(item.k.some(k=>txt.includes(k))){
+      return {cat:item.c, sub:item.s};
+    }
+  }
+  return {cat:"outros", sub:"geral"};
 }
 
-function obs(original){
-  const p = original.split(",");
-  return p.length>1 ? p.slice(1).join(",").trim() : "";
+
+// ================= OBS INTELIGENTE =================
+
+function extrairObs(txt, valor, forma){
+
+  let o = txt;
+
+  // remove gatilho ação
+  [...entradas,...saidas].forEach(w=>{
+    o = o.replace(w,"");
+  });
+
+  // remove valor
+  if(valor) o = o.replace(valor.toString(),"");
+
+  // remove forma
+  if(forma){
+    Object.keys(formas).forEach(k=>{
+      o = o.replace(k,"");
+    });
+  }
+
+  // remove conectivos lixo
+  o = o.replace(/\b(no|na|pro|pra|para|de|do|da|em|no)\b/g,"");
+
+  return o.trim();
 }
+
+
+// ================= PARSER V4 =================
 
 function parse(texto){
 
-  let t = norm(texto);
-  t = corrigir(t);
+  if(!texto) return null;
 
-  const tipo = detectarTipo(t);
+  const txt = normalizar(texto);
+
+  const tipo = detectarTipo(txt);
   if(!tipo) return null;
 
-  const nums = valores(t);
-  if(!nums.length) return null;
+  const valor = detectarValor(txt);
+  if(!valor) return null;
 
-  const forma = detectarForma(t);
-  const [cat,sub] = categoria(t);
+  const forma = detectarForma(txt);
+
+  const {cat, sub} = detectarCategoria(txt);
+
+  const obs = extrairObs(txt, valor, forma);
 
   return {
     tipo,
-    valor: nums[0],
+    valor,
     forma,
     cat,
     sub,
-    obs: obs(texto),
-    extras: nums.slice(1)
+    obs
   };
 }
+
 
 module.exports = { parse };
