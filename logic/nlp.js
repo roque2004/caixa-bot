@@ -1,97 +1,70 @@
+function norm(t){
+  return t.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"");
+}
+
 const formas = {
   pix: "PIX",
   dinheiro: "DINHEIRO",
   debito: "DEBITO",
-  débito: "DEBITO",
-  credito: "CREDITO",
-  crédito: "CREDITO",
-  cartao: "CREDITO",
-  cartão: "CREDITO"
+  credito: "CREDITO"
 };
 
-const gatilhosSaida = [
-  "paguei","pago","gastei","gasto","comprei","dei","pro","pra","para"
-];
+const saida = ["paguei","pago","dei","gastei","comprei","pro","pra"];
+const entrada = ["vendi","recebi","entrou","entrada"];
 
-const gatilhosEntrada = [
-  "vendi","venda","vendas","recebi","entrada","entrou"
-];
-
-function detectarForma(msg){
+function detectarForma(t){
   for(const k in formas){
-    if(msg.includes(k)) return formas[k];
+    if(t.includes(k)) return formas[k];
   }
   return null;
 }
 
-function detectarTipo(msg){
-  if(gatilhosSaida.some(g=>msg.includes(g))) return "SAIDA";
-  if(gatilhosEntrada.some(g=>msg.includes(g))) return "ENTRADA";
+function detectarTipo(t){
+  if(saida.some(w=>t.includes(w))) return "SAIDA";
+  if(entrada.some(w=>t.includes(w))) return "ENTRADA";
   return null;
 }
 
-function detectarCategoria(msg){
-  if(msg.includes("padeiro")) return ["fornecedor","padeiro"];
-  if(msg.includes("mercado")) return ["insumos","mercado"];
-  if(msg.includes("entregador")) return ["mao_obra","entregador"];
-  return ["outros","geral"];
+function detectarValor(t){
+  const m = t.match(/\d+[.,]?\d*/);
+  if(!m) return null;
+  return parseFloat(m[0].replace(",","."));
 }
 
-function extrairValorPrincipal(msg){
-  const nums = msg.match(/\d+[.,]?\d*/g);
-  if(!nums) return null;
-  return parseFloat(nums[0].replace(",","."));
-}
+function limparObs(orig){
 
-function limparObs(original){
+  let o = norm(orig);
 
-  let obs = original;
-
-  // remove comandos
-  gatilhosSaida.concat(gatilhosEntrada).forEach(w=>{
-    obs = obs.replace(new RegExp(w,"ig"),"");
+  [...saida,...entrada,"pix","dinheiro","debito","credito"]
+  .forEach(w=>{
+    o = o.replace(new RegExp(`\\b${w}\\b`,"g")," ");
   });
 
-  // remove formas
-  Object.keys(formas).forEach(w=>{
-    obs = obs.replace(new RegExp(w,"ig"),"");
-  });
+  o = o.replace(/\d+[.,]?\d*/," ");
+  o = o.replace(/\s+/g," ").trim();
 
-  // remove categoria palavras
-  ["padeiro","mercado","entregador"].forEach(w=>{
-    obs = obs.replace(new RegExp(w,"ig"),"");
-  });
-
-  // remove primeiro número (valor principal)
-  obs = obs.replace(/\d+[.,]?\d*/,"");
-
-  // remove conectores
-  obs = obs.replace(/\b(no|na|pro|pra|para|em)\b/ig,"");
-
-  return obs.trim();
+  return o;
 }
 
 function parse(texto){
 
-  const msg = texto.toLowerCase();
+  const t = norm(texto);
 
-  const tipo = detectarTipo(msg);
+  const tipo = detectarTipo(t);
   if(!tipo) return null;
 
-  const valor = extrairValorPrincipal(msg);
+  const valor = detectarValor(t);
   if(!valor) return null;
-
-  const forma = detectarForma(msg);
-  const [cat,sub] = detectarCategoria(msg);
-  const obs = limparObs(msg);
 
   return {
     tipo,
     valor,
-    forma,
-    cat,
-    sub,
-    obs
+    forma: detectarForma(t),
+    cat: "outros",
+    sub: "geral",
+    obs: limparObs(texto)
   };
 }
 
