@@ -1,24 +1,3 @@
-function normalizar(txt){
-  return txt
-    .toLowerCase()
-    .replace(/reias|reais/g,"reais")
-    .replace(/gatos/g,"gastos")
-    .replace(/[.,]/g," ")
-    .replace(/\s+/g," ")
-}
-
-
-// ================= DICIONÁRIOS =================
-
-const entradas = [
-  "vendi","venda","vendas","recebi","entrou","entrada","faturei"
-];
-
-const saidas = [
-  "paguei","pago","pagamento","gastei","gasto",
-  "comprei","dei","dei pro","dei pra","transferi"
-];
-
 const formas = {
   pix: "PIX",
   dinheiro: "DINHEIRO",
@@ -30,115 +9,81 @@ const formas = {
   cartão: "CREDITO"
 };
 
-
-// ================= CATEGORIAS =================
-
-const mapaCat = [
-  {k:["padeiro","pao"], c:"fornecedor", s:"padeiro"},
-  {k:["ifood"], c:"taxa", s:"ifood"},
-  {k:["entregador","motoboy"], c:"mão de obra", s:"entregador"},
-  {k:["auxiliar","funcionario"], c:"mão de obra", s:"auxiliar"},
-  {k:["mercado"], c:"insumos", s:"mercado"},
-  {k:["gas","gasolina"], c:"deslocamento", s:"combustivel"},
-  {k:["embalagem","sacola"], c:"insumos", s:"embalagem"},
+const gatilhosSaida = [
+  "paguei","pago","gastei","gasto","comprei","dei","pro","pra","para"
 ];
 
+const gatilhosEntrada = [
+  "vendi","venda","vendas","recebi","entrada","entrou"
+];
 
-// ================= CORE =================
-
-function detectarTipo(txt){
-
-  if(entradas.some(w=>txt.includes(w))) return "ENTRADA";
-  if(saidas.some(w=>txt.includes(w))) return "SAIDA";
-
-  return null;
-}
-
-
-function detectarForma(txt){
-
-  const tokens = txt.split(" ");
-
-  for(const t of tokens){
-
-    if(formas[t]) return formas[t];
-
-  }
-
-  // fallback regex palavra inteira
+function detectarForma(msg){
   for(const k in formas){
-    const r = new RegExp("\\b"+k+"\\b");
-    if(r.test(txt)) return formas[k];
+    if(msg.includes(k)) return formas[k];
   }
-
   return null;
 }
 
-
-function detectarValor(txt){
-  const m = txt.match(/\d+[.,]?\d*/);
-  if(!m) return null;
-  return parseFloat(m[0].replace(",","."));
+function detectarTipo(msg){
+  if(gatilhosSaida.some(g=>msg.includes(g))) return "SAIDA";
+  if(gatilhosEntrada.some(g=>msg.includes(g))) return "ENTRADA";
+  return null;
 }
 
-
-function detectarCategoria(txt){
-  for(const item of mapaCat){
-    if(item.k.some(k=>txt.includes(k))){
-      return {cat:item.c, sub:item.s};
-    }
-  }
-  return {cat:"outros", sub:"geral"};
+function detectarCategoria(msg){
+  if(msg.includes("padeiro")) return ["fornecedor","padeiro"];
+  if(msg.includes("mercado")) return ["insumos","mercado"];
+  if(msg.includes("entregador")) return ["mao_obra","entregador"];
+  return ["outros","geral"];
 }
 
+function extrairValorPrincipal(msg){
+  const nums = msg.match(/\d+[.,]?\d*/g);
+  if(!nums) return null;
+  return parseFloat(nums[0].replace(",","."));
+}
 
-// ================= OBS INTELIGENTE =================
+function limparObs(original){
 
-function extrairObs(txt, valor, forma){
+  let obs = original;
 
-  let o = txt;
-
-  // remove gatilho ação
-  [...entradas,...saidas].forEach(w=>{
-    o = o.replace(w,"");
+  // remove comandos
+  gatilhosSaida.concat(gatilhosEntrada).forEach(w=>{
+    obs = obs.replace(new RegExp(w,"ig"),"");
   });
 
-  // remove valor
-  if(valor) o = o.replace(valor.toString(),"");
+  // remove formas
+  Object.keys(formas).forEach(w=>{
+    obs = obs.replace(new RegExp(w,"ig"),"");
+  });
 
-  // remove forma
-  if(forma){
-    Object.keys(formas).forEach(k=>{
-      o = o.replace(k,"");
-    });
-  }
+  // remove categoria palavras
+  ["padeiro","mercado","entregador"].forEach(w=>{
+    obs = obs.replace(new RegExp(w,"ig"),"");
+  });
 
-  // remove conectivos lixo
-  o = o.replace(/\b(no|na|pro|pra|para|de|do|da|em|no)\b/g,"");
+  // remove primeiro número (valor principal)
+  obs = obs.replace(/\d+[.,]?\d*/,"");
 
-  return o.trim();
+  // remove conectores
+  obs = obs.replace(/\b(no|na|pro|pra|para|em)\b/ig,"");
+
+  return obs.trim();
 }
-
-
-// ================= PARSER V4 =================
 
 function parse(texto){
 
-  if(!texto) return null;
+  const msg = texto.toLowerCase();
 
-  const txt = normalizar(texto);
-
-  const tipo = detectarTipo(txt);
+  const tipo = detectarTipo(msg);
   if(!tipo) return null;
 
-  const valor = detectarValor(txt);
+  const valor = extrairValorPrincipal(msg);
   if(!valor) return null;
 
-  const forma = detectarForma(txt);
-
-  const {cat, sub} = detectarCategoria(txt);
-
-  const obs = extrairObs(txt, valor, forma);
+  const forma = detectarForma(msg);
+  const [cat,sub] = detectarCategoria(msg);
+  const obs = limparObs(msg);
 
   return {
     tipo,
@@ -149,6 +94,5 @@ function parse(texto){
     obs
   };
 }
-
 
 module.exports = { parse };
