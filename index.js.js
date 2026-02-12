@@ -22,7 +22,7 @@ app.use(express.json());
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "caixabot123";
 
 
-// ================= WEBHOOK VERIFY =================
+// ================= VERIFY =================
 
 app.get("/webhook",(req,res)=>{
   if(req.query["hub.verify_token"] === VERIFY_TOKEN){
@@ -32,7 +32,7 @@ app.get("/webhook",(req,res)=>{
 });
 
 
-// ================= WEBHOOK POST =================
+// ================= POST =================
 
 app.post("/webhook", async (req,res)=>{
 
@@ -44,7 +44,7 @@ if(!m) return res.sendStatus(200);
 const from = m.from;
 
 
-// ---------- TEXTO ----------
+// ================= TEXTO =================
 
 if(m.text){
 
@@ -56,57 +56,37 @@ if(m.text){
     return res.sendStatus(200);
   }
 
-  // pendência forma
-  if(pendencias[from]){
-    const forma = parse(texto)?.forma;
-    if(forma){
-      const d = pendencias[from];
-      await salvarCaixa(d.tipo,d.valor,forma,d.obs);
-      if(d.tipo==="SAIDA")
-        await salvarGasto(d.cat,d.sub,d.valor,forma,d.obs);
+  const lista = parse(texto);
+  if(!lista) return res.sendStatus(200);
 
-      delete pendencias[from];
-      await enviarMensagem(from,"✅ Lançado");
-      return res.sendStatus(200);
+  for(const dados of lista){
+
+    await salvarCaixa(
+      dados.tipo,
+      dados.valor,
+      dados.forma || "PIX",
+      dados.obs
+    );
+
+    if(dados.tipo==="SAIDA"){
+      await salvarGasto(
+        dados.cat,
+        dados.sub,
+        dados.valor,
+        dados.forma || "PIX",
+        dados.obs
+      );
     }
   }
 
-  const dados = parse(texto);
-  if(!dados) return res.sendStatus(200);
-
-  if(!dados.forma){
-    pendencias[from] = dados;
-
-    await enviarMensagem(from,
-      "Qual a forma de pagamento? pix, dinheiro, debito ou credito");
-
-    setTimeout(async()=>{
-      if(!pendencias[from]) return;
-      const d = pendencias[from];
-
-      await salvarCaixa(d.tipo,d.valor,"PIX",d.obs);
-      if(d.tipo==="SAIDA")
-        await salvarGasto(d.cat,d.sub,d.valor,"PIX",d.obs);
-
-      delete pendencias[from];
-    },120000);
-
-    return res.sendStatus(200);
-  }
-
-  await salvarCaixa(dados.tipo,dados.valor,dados.forma,dados.obs);
-
-  if(dados.tipo==="SAIDA")
-    await salvarGasto(dados.cat,dados.sub,dados.valor,dados.forma,dados.obs);
-
   await enviarMensagem(from,
-    `✅ ${dados.tipo} R$${dados.valor} via ${dados.forma}`);
+    `✅ ${lista.length} lançamento(s) registrado(s)`);
 
   return res.sendStatus(200);
 }
 
 
-// ---------- IMAGEM ----------
+// ================= IMAGEM =================
 
 if(m.image){
 
@@ -120,7 +100,7 @@ if(m.image){
 }
 
 
-// ---------- DOCUMENTO / PDF ----------
+// ================= PDF =================
 
 if(m.document){
 
@@ -135,7 +115,7 @@ if(m.document){
 }
 
 
-// ---------- ÁUDIO ----------
+// ================= AUDIO =================
 
 if(m.audio){
 
@@ -147,13 +127,31 @@ if(m.audio){
   await enviarMensagem(from,
     `🎤 Entendi: "${texto}"`);
 
-  const dados = parse(texto);
-  if(dados){
-    await salvarCaixa(dados.tipo,dados.valor,
-      dados.forma || "PIX",
-      dados.obs);
+  const lista = parse(texto);
 
-    await enviarMensagem(from,"✅ Lançado do áudio");
+  if(lista){
+    for(const dados of lista){
+
+      await salvarCaixa(
+        dados.tipo,
+        dados.valor,
+        dados.forma || "PIX",
+        dados.obs
+      );
+
+      if(dados.tipo==="SAIDA"){
+        await salvarGasto(
+          dados.cat,
+          dados.sub,
+          dados.valor,
+          dados.forma || "PIX",
+          dados.obs
+        );
+      }
+    }
+
+    await enviarMensagem(from,
+      `✅ ${lista.length} lançamento(s) do áudio`);
   }
 
   return res.sendStatus(200);

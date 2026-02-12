@@ -1,71 +1,101 @@
-function norm(t){
+function limpar(t){
   return t.toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"");
 }
 
-const formas = {
-  pix: "PIX",
-  dinheiro: "DINHEIRO",
-  debito: "DEBITO",
-  credito: "CREDITO"
+const GATILHOS = ["paguei","pago","dei","gastei","comprei","recebi","vendi"];
+
+const FORMAS = {
+  PIX:["pix"],
+  DINHEIRO:["dinheiro"],
+  DEBITO:["debito"],
+  CREDITO:["credito"]
 };
 
-const saida = ["paguei","pago","dei","gastei","comprei","pro","pra"];
-const entrada = ["vendi","recebi","entrou","entrada"];
-
 function detectarForma(t){
-  for(const k in formas){
-    if(t.includes(k)) return formas[k];
+  for(const k in FORMAS){
+    if(FORMAS[k].some(p=>t.includes(p))) return k;
   }
   return null;
 }
 
-function detectarTipo(t){
-  if(saida.some(w=>t.includes(w))) return "SAIDA";
-  if(entrada.some(w=>t.includes(w))) return "ENTRADA";
-  return null;
+function detectarCat(t){
+  if(t.includes("padeiro")) return ["fornecedor","padeiro"];
+  if(t.includes("mercado")) return ["fornecedor","mercado"];
+  if(t.includes("entregador")) return ["mao_obra","entregador"];
+  return ["outros","geral"];
 }
 
-function detectarValor(t){
-  const m = t.match(/\d+[.,]?\d*/);
-  if(!m) return null;
-  return parseFloat(m[0].replace(",","."));
+// divide por gatilhos → múltiplos eventos
+function quebrarEventos(t){
+  const partes = t.split(
+    new RegExp(`\\b(${GATILHOS.join("|")})\\b`)
+  );
+
+  const eventos = [];
+
+  for(let i=1;i<partes.length;i+=2){
+    eventos.push(partes[i]+" "+partes[i+1]);
+  }
+
+  return eventos.length ? eventos : [t];
 }
 
-function limparObs(orig){
+function extrairValor(txt){
+  const n = txt.match(/\d+[.,]?\d*/);
+  if(!n) return null;
+  return parseFloat(n[0].replace(",","."));  
+}
 
-  let o = norm(orig);
+function limparObs(txt){
 
-  [...saida,...entrada,"pix","dinheiro","debito","credito"]
-  .forEach(w=>{
-    o = o.replace(new RegExp(`\\b${w}\\b`,"g")," ");
+  let o = limpar(txt);
+
+  GATILHOS.forEach(w=>{
+    o = o.replace(new RegExp("\\b"+w+"\\b","g"),"");
   });
 
-  o = o.replace(/\d+[.,]?\d*/," ");
-  o = o.replace(/\s+/g," ").trim();
+  Object.values(FORMAS).flat().forEach(w=>{
+    o = o.replace(new RegExp("\\b"+w+"\\b","g"),"");
+  });
 
-  return o;
+  ["no","na","pro","pra","para","em","do","da"].forEach(w=>{
+    o = o.replace(new RegExp("\\b"+w+"\\b","g"),"");
+  });
+
+  o = o.replace(/\d+[.,]?\d*/,"");
+
+  return o.replace(/\s+/g," ").trim();
 }
 
 function parse(texto){
 
-  const t = norm(texto);
+  const t = limpar(texto);
+  const formaGlobal = detectarForma(t);
 
-  const tipo = detectarTipo(t);
-  if(!tipo) return null;
+  const eventos = quebrarEventos(t);
 
-  const valor = detectarValor(t);
-  if(!valor) return null;
+  const saidas = [];
 
-  return {
-    tipo,
-    valor,
-    forma: detectarForma(t),
-    cat: "outros",
-    sub: "geral",
-    obs: limparObs(texto)
-  };
+  for(const ev of eventos){
+
+    const valor = extrairValor(ev);
+    if(!valor) continue;
+
+    const [cat,sub] = detectarCat(ev);
+
+    saidas.push({
+      tipo:"SAIDA",
+      valor,
+      forma: formaGlobal,
+      cat,
+      sub,
+      obs: limparObs(ev)
+    });
+  }
+
+  return saidas.length ? saidas : null;
 }
 
 module.exports = { parse };
