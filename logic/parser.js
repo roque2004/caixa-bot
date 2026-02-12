@@ -47,6 +47,40 @@ function extrairValor(txt){
   return parseFloat(nums[0].replace(",","."));
 }
 
+function limparObs(original){
+
+  let obs = original.toLowerCase();
+
+  // remove gatilhos
+  gatilhosSaida.concat(gatilhosEntrada).forEach(w=>{
+    obs = obs.replace(new RegExp("\\b"+w+"\\b","g"),"");
+  });
+
+  // remove formas pagamento
+  Object.keys(formas).forEach(w=>{
+    obs = obs.replace(new RegExp("\\b"+w+"\\b","g"),"");
+  });
+
+  // remove categorias conhecidas
+  ["padeiro","mercado","entregador"].forEach(w=>{
+    obs = obs.replace(new RegExp("\\b"+w+"\\b","g"),"");
+  });
+
+  // remove conectores
+  ["no","na","pro","pra","para","em","do","da"].forEach(w=>{
+    obs = obs.replace(new RegExp("\\b"+w+"\\b","g"),"");
+  });
+
+  // remove primeiro valor (valor principal)
+  obs = obs.replace(/\d+[.,]?\d*/,"");
+
+  // limpa espaços extras
+  obs = obs.replace(/\s+/g," ").trim();
+
+  return obs;
+}
+
+
 function extrairObs(txt){
   const partes = txt.split(",");
   if(partes.length < 2) return "";
