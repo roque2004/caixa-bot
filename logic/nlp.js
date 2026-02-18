@@ -5,13 +5,14 @@ function limpar(txt){
     .replace(/[\u0300-\u036f]/g,"");
 }
 
+
 // ================= DICIONÁRIOS =================
 
 const FORMAS = {
   PIX: ["pix"],
   DINHEIRO: ["dinheiro","cash"],
-  DEBITO: ["debito","cartao debito","cartao de debito"],
-  CREDITO: ["credito","cartao credito","cartao de credito"]
+  DEBITO: ["debito","cartao debito"],
+  CREDITO: ["credito","cartao credito"]
 };
 
 const GATILHOS_SAIDA = [
@@ -26,7 +27,7 @@ const FORNECEDORES = {
   padeiro:["padeiro","padaria"],
   mercado:["mercado"],
   frios:["frios"],
-  acougue:["acougue","açougue"]
+  acougue:["acougue"]
 };
 
 const MAO_OBRA = {
@@ -36,8 +37,9 @@ const MAO_OBRA = {
 };
 
 const CONECTORES = [
-  "no","na","pra","pro","para","em","do","da","o","a"
+  "no","na","pra","pro","para","em","do","da","o","a","e"
 ];
+
 
 // ================= HELPERS =================
 
@@ -58,61 +60,61 @@ function detectarForma(txt){
 
 function detectarCategoria(txt){
 
-  for(const sub in FORNECEDORES){
-    if(FORNECEDORES[sub].some(w=>txt.includes(w))){
-      return { cat:"fornecedor", sub };
-    }
-  }
-
   for(const sub in MAO_OBRA){
     if(MAO_OBRA[sub].some(w=>txt.includes(w))){
       return { cat:"mao_obra", sub };
     }
   }
 
+  for(const sub in FORNECEDORES){
+    if(FORNECEDORES[sub].some(w=>txt.includes(w))){
+      return { cat:"fornecedor", sub };
+    }
+  }
+
   return { cat:"outros", sub:"geral" };
 }
 
-function extrairNumeros(txt){
-  const nums = txt.match(/\d+[.,]?\d*/g);
-  if(!nums) return [];
-  return nums.map(n => parseFloat(n.replace(",", ".")));
+
+// ================= SEGMENTADOR =================
+
+function dividir(txt){
+  return txt
+    .replace(/\+/g," e ")
+    .replace(/\//g," e ")
+    .split(/,| e /g)
+    .map(s=>s.trim())
+    .filter(Boolean);
 }
 
 
-// ================= OBS LIMPA PRO =================
+// ================= VALOR =================
 
-function limparObs(original, valorPrincipal){
+function extrairValor(seg){
+  const m = seg.match(/\d+[.,]?\d*/);
+  if(!m) return null;
+  return parseFloat(m[0].replace(",","."));
+}
 
-  let t = limpar(original);
 
-  // remove gatilhos
+// ================= OBS LIMPA =================
+
+function limparObs(seg, valor){
+
+  let t = limpar(seg);
+
   [...GATILHOS_SAIDA, ...GATILHOS_ENTRADA]
-    .forEach(w=>{
-      t = t.replace(new RegExp("\\b"+w+"\\b","g"),"");
-    });
+    .forEach(w=> t = t.replace(new RegExp("\\b"+w+"\\b","g"),""));
 
-  // remove formas
   Object.values(FORMAS).flat()
-    .forEach(w=>{
-      t = t.replace(new RegExp("\\b"+w+"\\b","g"),"");
-    });
+    .forEach(w=> t = t.replace(new RegExp("\\b"+w+"\\b","g"),""));
 
-  // remove conectores
   CONECTORES.forEach(w=>{
     t = t.replace(new RegExp("\\b"+w+"\\b","g"),"");
   });
 
-  // remove categorias conhecidas
-  Object.values(FORNECEDORES).flat()
-    .concat(Object.values(MAO_OBRA).flat())
-    .forEach(w=>{
-      t = t.replace(new RegExp("\\b"+w+"\\b","g"),"");
-    });
-
-  // remove valor principal (só o primeiro)
-  if(valorPrincipal){
-    const r = new RegExp(valorPrincipal.toString().replace(".","\\."));
+  if(valor){
+    const r = new RegExp(valor.toString().replace(".","\\."));
     t = t.replace(r,"");
   }
 
@@ -120,7 +122,7 @@ function limparObs(original, valorPrincipal){
 }
 
 
-// ================= PARSER MASTER =================
+// ================= PARSER =================
 
 function parse(textoOriginal){
 
@@ -129,28 +131,39 @@ function parse(textoOriginal){
   const tipo = detectarTipo(txt);
   if(!tipo) return null;
 
-  const formaDetectada = detectarForma(txt);
-  const categoria = detectarCategoria(txt);
+  const formaGlobal = detectarForma(txt);
 
-  const valores = extrairNumeros(txt);
-  if(valores.length === 0) return null;
+  const partes = dividir(txt);
 
-  // ✅ MULTI LANÇAMENTO
-  const lista = valores.map((valor, idx)=>{
+  const lista = [];
 
-    const obs = limparObs(textoOriginal, valores[0]);
+  for(const seg of partes){
 
-    return {
+    const valor = extrairValor(seg);
+    if(!valor) continue;
+
+    const formaLocal = detectarForma(seg);
+
+    const forma = formaLocal || formaGlobal || null;
+
+    const cat = detectarCategoria(seg);
+
+    const obs = limparObs(seg, valor);
+
+    lista.push({
       tipo,
       valor,
-      forma: formaDetectada, // pode ser null → index.js faz fallback PIX
-      cat: categoria.cat,
-      sub: categoria.sub,
+      forma,
+      cat: cat.cat,
+      sub: cat.sub,
       obs
-    };
-  });
+    });
+  }
+
+  if(lista.length === 0) return null;
 
   return lista;
 }
+
 
 module.exports = { parse };
