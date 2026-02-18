@@ -14,8 +14,6 @@ const {
 
 const { enviarMensagem } = require("./services/whatsapp");
 
-const pendencias = {};
-
 const app = express();
 app.use(express.json());
 
@@ -42,6 +40,7 @@ const m = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 if(!m) return res.sendStatus(200);
 
 const from = m.from;
+const msg_Id = m.id || "";
 
 
 // ================= TEXTO =================
@@ -65,22 +64,30 @@ if(m.text){
       dados.tipo,
       dados.valor,
       dados.forma || "PIX",
-      dados.obs
+      dados.obs,
+      dados.cat,
+      dados.sub,
+      msg_Id,
+      ""
     );
 
-    if(dados.tipo==="SAIDA"){
+    if(dados.tipo === "SAIDA"){
       await salvarGasto(
         dados.cat,
         dados.sub,
         dados.valor,
         dados.forma || "PIX",
-        dados.obs
+        dados.obs,
+        msg_Id,
+        ""
       );
     }
   }
 
-  await enviarMensagem(from,
-    `✅ ${lista.length} lançamento(s) registrado(s)`);
+  await enviarMensagem(
+    from,
+    `✅ ${lista.length} lançamento(s) registrado(s)`
+  );
 
   return res.sendStatus(200);
 }
@@ -93,8 +100,10 @@ if(m.image){
   const buffer = await baixarMidia(m.image.id);
   const nome = salvarBuffer(buffer,"jpg");
 
-  await enviarMensagem(from,
-    `📎 Comprovante salvo: ${nome}`);
+  await enviarMensagem(
+    from,
+    `📎 Comprovante salvo: ${nome}`
+  );
 
   return res.sendStatus(200);
 }
@@ -108,8 +117,10 @@ if(m.document){
   const buffer = await baixarMidia(m.document.id);
   const nome = salvarBuffer(buffer,ext);
 
-  await enviarMensagem(from,
-    `📄 Documento salvo: ${nome}`);
+  await enviarMensagem(
+    from,
+    `📄 Documento salvo: ${nome}`
+  );
 
   return res.sendStatus(200);
 }
@@ -124,34 +135,45 @@ if(m.audio){
 
   const texto = await transcrever(`uploads/${nome}`);
 
-  await enviarMensagem(from,
-    `🎤 Entendi: "${texto}"`);
+  await enviarMensagem(
+    from,
+    `🎤 Entendi: "${texto}"`
+  );
 
   const lista = parse(texto);
 
   if(lista){
+
     for(const dados of lista){
 
       await salvarCaixa(
         dados.tipo,
         dados.valor,
         dados.forma || "PIX",
-        dados.obs
+        dados.obs,
+        dados.cat,
+        dados.sub,
+        msg_Id,
+        nome
       );
 
-      if(dados.tipo==="SAIDA"){
+      if(dados.tipo === "SAIDA"){
         await salvarGasto(
           dados.cat,
           dados.sub,
           dados.valor,
           dados.forma || "PIX",
-          dados.obs
+          dados.obs,
+          msg_Id,
+          nome
         );
       }
     }
 
-    await enviarMensagem(from,
-      `✅ ${lista.length} lançamento(s) do áudio`);
+    await enviarMensagem(
+      from,
+      `✅ ${lista.length} lançamento(s) do áudio`
+    );
   }
 
   return res.sendStatus(200);
@@ -159,7 +181,7 @@ if(m.audio){
 
 
 }catch(e){
- console.log("🔥",e.message);
+ console.log("🔥 ERRO:", e.message);
 }
 
 res.sendStatus(200);
@@ -169,5 +191,5 @@ res.sendStatus(200);
 // ================= START =================
 
 app.listen(process.env.PORT || 3000,()=>{
-  console.log("🧠 CaixaBot MASTER ativo");
+  console.log("🧠 CaixaBot MASTER PRO ativo");
 });
